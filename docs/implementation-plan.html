@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FinanceOS v1 implementation plan</title>
+<style>
+  :root {
+    --paper: #eef2ef;
+    --sheet: #f8faf8;
+    --ink: #14292f;
+    --muted: #4f656a;
+    --rule: #c3d0cc;
+    --ruled-line: #dce6e2;
+    --credit: #0d6b56;
+    --credit-soft: #d6ebe3;
+    --debit: #9a5b0f;
+    --debit-soft: #f3e3c8;
+    --focus: #1d5fd1;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f1b1f;
+      --sheet: #15262b;
+      --ink: #e3ece9;
+      --muted: #9bb0ab;
+      --rule: #2d4349;
+      --ruled-line: #1f353b;
+      --credit: #5fcfae;
+      --credit-soft: #17382f;
+      --debit: #e0a550;
+      --debit-soft: #3a2c14;
+      --focus: #7aa8ff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f1b1f; --sheet: #15262b; --ink: #e3ece9; --muted: #9bb0ab;
+    --rule: #2d4349; --ruled-line: #1f353b; --credit: #5fcfae; --credit-soft: #17382f;
+    --debit: #e0a550; --debit-soft: #3a2c14; --focus: #7aa8ff;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 1rem/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--credit); text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+  .skip { position: absolute; left: -999px; }
+  .skip:focus { left: 16px; top: 16px; background: var(--sheet); padding: 8px 12px; z-index: 10; }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: 0 3rem;
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+  nav.index {
+    position: sticky; top: 0; align-self: start;
+    padding: 2.5rem 0;
+    max-height: 100vh; overflow-y: auto;
+    font-size: .9rem;
+  }
+  nav.index p { margin: 0 0 .75rem; font-family: var(--serif); font-size: 1.1rem; font-weight: 700; }
+  nav.index ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--rule); }
+  nav.index a {
+    display: block; padding: .3rem 0 .3rem .9rem; margin-left: -2px;
+    border-left: 2px solid transparent; color: var(--muted); text-decoration: none;
+  }
+  nav.index a:hover { color: var(--ink); border-left-color: var(--credit); }
+
+  main { padding: 2.5rem 0 5rem; min-width: 0; }
+  section { margin-top: 4.5rem; scroll-margin-top: 1rem; }
+  h1, h2, h3 { font-family: var(--serif); line-height: 1.15; margin: 0; letter-spacing: -.01em; }
+  h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); max-width: 18ch; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); margin-bottom: 1rem; }
+  h3 { font-size: 1.2rem; }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .lede { font-family: var(--serif); font-size: 1.25rem; line-height: 1.55; color: var(--muted); margin-top: 1.25rem; max-width: 58ch; }
+  .status { margin-top: 1rem; font-size: .9rem; color: var(--muted); }
+
+  /* The dedupe ledger demo */
+  .ledger {
+    margin-top: 2.5rem;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 2.4rem, var(--ruled-line) 2.4rem calc(2.4rem + 1px));
+    padding: 1.5rem 1.5rem 1.25rem;
+    max-width: 44rem;
+  }
+  .ledger h2 { font-size: 1.35rem; margin-bottom: .25rem; }
+  .ledger .sub { color: var(--muted); font-size: .95rem; margin-bottom: 1.25rem; background: var(--sheet); display: inline; }
+  .presets { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.25rem; }
+  .presets button {
+    font: inherit; font-size: .9rem; cursor: pointer;
+    background: var(--sheet); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 999px; padding: .4rem .9rem;
+  }
+  .presets button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+  .row { display: grid; grid-template-columns: 1fr 5.5rem; align-items: center; gap: 1rem; padding: .35rem 0; }
+  .row label { font-weight: 600; }
+  .row small { display: block; font-weight: 400; color: var(--muted); font-size: .85rem; }
+  .row input {
+    font: inherit; font-variant-numeric: tabular-nums; text-align: right;
+    width: 100%; padding: .4rem .6rem; background: var(--sheet); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 4px;
+  }
+  .result {
+    margin-top: 1rem; padding: .9rem 1rem; border-radius: 4px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+    background: var(--credit-soft); border-left: 5px solid var(--credit);
+  }
+  .result.none { background: var(--debit-soft); border-left-color: var(--debit); }
+  .result strong { font-family: var(--serif); font-size: 2rem; font-variant-numeric: tabular-nums; line-height: 1; }
+  .result span { max-width: 28rem; }
+  .formula { margin: 1rem 0 0; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* Pipeline */
+  .pipeline { list-style: none; padding: 0; margin: 1.5rem 0 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 3px solid var(--ink); }
+  .pipeline li { padding: 1rem .9rem 1rem 0; position: relative; }
+  .pipeline li + li { padding-left: .9rem; border-left: 1px solid var(--rule); }
+  .pipeline b { display: block; font-family: var(--serif); font-size: 1.1rem; }
+  .pipeline span { display: block; font-size: .88rem; color: var(--muted); margin-top: .2rem; }
+  .pipeline em { display: inline-block; font-style: normal; font-size: .8rem; margin-top: .5rem; padding: .1rem .5rem; border-radius: 3px; background: var(--credit-soft); color: var(--ink); }
+  .pipeline em.api { background: var(--debit-soft); }
+
+  .callout { border-left: 4px solid var(--credit); padding: .25rem 0 .25rem 1rem; margin: 1.5rem 0; max-width: 68ch; }
+  ul.plain { padding-left: 1.2rem; max-width: 68ch; }
+  ul.plain li { margin-bottom: .45rem; }
+
+  /* Milestones */
+  .milestones { list-style: none; margin: 0; padding: 0; border-top: 3px solid var(--ink); }
+  .milestones > li {
+    display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0 1.5rem;
+    padding: 1.5rem 0; border-bottom: 1px solid var(--rule);
+  }
+  .milestones .id { font-family: var(--serif); font-size: 1.9rem; font-weight: 700; color: var(--credit); line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .milestones h3 { margin-bottom: .5rem; }
+  .milestones .tag { font-size: .85rem; color: var(--muted); margin: -.25rem 0 .6rem; }
+  .milestones .tag.gate { color: var(--debit); font-weight: 600; }
+  .milestones ul { margin: 0; padding-left: 1.1rem; max-width: 66ch; }
+  .milestones li li { margin-bottom: .3rem; }
+  .milestones .core { background: var(--credit-soft); margin: 0 -1rem; padding: 1.5rem 1rem; border-radius: 4px; border-bottom: 0; }
+
+  /* Tests table */
+  table { border-collapse: collapse; width: 100%; max-width: 52rem; font-size: .95rem; }
+  th, td { text-align: left; padding: .6rem .75rem .6rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--serif); font-size: 1rem; border-bottom: 2px solid var(--ink); }
+
+  /* Decisions */
+  dl.decisions { margin: 0; max-width: 62rem; border-top: 3px solid var(--ink); }
+  dl.decisions > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 0 2rem; padding: 1.1rem 0; border-bottom: 1px solid var(--rule); }
+  dl.decisions dt { font-weight: 600; }
+  dl.decisions dd { margin: 0; color: var(--muted); }
+  dl.decisions dd b { color: var(--credit); }
+
+  footer { margin-top: 4rem; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--rule); padding-top: 1rem; }
+
+  @media (max-width: 62rem) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    nav.index { position: static; padding: 1.5rem 0 0; max-height: none; }
+    nav.index ol { display: flex; flex-wrap: wrap; gap: .25rem 1rem; border-left: 0; }
+    nav.index a { padding: .2rem 0; border-left: 0; margin: 0; text-decoration: underline; }
+    .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pipeline li:nth-child(odd) { padding-left: 0; border-left: 0; }
+    .pipeline li { border-bottom: 1px solid var(--rule); }
+  }
+  @media (max-width: 40rem) {
+    .milestones > li { grid-template-columns: minmax(0, 1fr); }
+    .milestones .core { margin: 0; }
+    dl.decisions > div { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
+    .pipeline { grid-template-columns: minmax(0, 1fr); }
+    .pipeline li, .pipeline li + li { padding-left: 0; border-left: 0; }
+    .ledger { padding: 1.1rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="shell">
+  <nav class="index" aria-label="Sections">
+    <p>FinanceOS v1</p>
+    <ol>
+      <li><a href="#dedupe">How re-imports stay safe</a></li>
+      <li><a href="#flow">Import flow</a></li>
+      <li><a href="#milestones">Milestones</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="#decisions">Decisions needed</a></li>
+    </ol>
+  </nav>
+
+  <main id="main">
+    <header>
+      <h1>Build the picture from statements you already have</h1>
+      <p class="lede">Version one reads CSV, OFX, QIF and text-based PDF statements, lets you review them, and turns them into accounts, budgets and net worth. No bank logins, no paid APIs.</p>
+      <p class="status">Draft plan, written against <code>docs/product-spec.md</code>. This plan settles spec open decision 1: text-based PDF import is in v1. Scanned-document OCR is not.</p>
+    </header>
+
+    <section id="dedupe" aria-labelledby="dedupe-h">
+      <div class="ledger">
+        <h2 id="dedupe-h">Try the de-duplication rule</h2>
+        <p class="sub">Each transaction gets a key: account, date, amount and cleaned-up description. For each key, v1 adds only the rows the database does not already hold.</p>
+        <div class="presets" role="group" aria-label="Example scenarios">
+          <button type="button" data-e="2" data-f="2" aria-pressed="true">Same file again</button>
+          <button type="button" data-e="2" data-f="3" aria-pressed="false">Overlapping statement</button>
+          <button type="button" data-e="0" data-f="2" aria-pressed="false">Two real coffees</button>
+        </div>
+        <div class="row">
+          <label for="existing">Already saved with this key<small>For example, ₹100 at a café on 4 March</small></label>
+          <input id="existing" type="number" min="0" max="99" value="2" inputmode="numeric">
+        </div>
+        <div class="row">
+          <label for="infile">Found in the new file<small>Same key, same day</small></label>
+          <input id="infile" type="number" min="0" max="99" value="2" inputmode="numeric">
+        </div>
+        <div class="result" id="result" aria-live="polite">
+          <strong id="added">0</strong>
+          <span id="explain"></span>
+        </div>
+        <p class="formula" id="formula"></p>
+      </div>
+    </section>
+
+    <section id="flow" aria-labelledby="flow-h">
+      <h2 id="flow-h">Import flow</h2>
+      <p>Nothing is saved until you have looked at it. The first pass is a preview that writes nothing; the second is a commit you confirm.</p>
+      <ol class="pipeline">
+        <li><b>Upload</b><span>Sign-in check, size limit, file type by content</span><em class="api">apps/api</em></li>
+        <li><b>Parse</b><span>CSV, OFX, QIF or PDF text into one normalized shape</span><em>packages/core</em></li>
+        <li><b>Validate</b><span>Strict schema on every parsed row, injection-safe text</span><em>packages/core</em></li>
+        <li><b>De-duplicate</b><span>Count rule above, possible duplicates flagged</span><em>packages/core</em></li>
+        <li><b>Review</b><span>Fix categories, skip rows, resolve flags</span><em class="api">apps/web</em></li>
+        <li><b>Commit</b><span>All rows or none, batch recorded with a file hash</span><em class="api">apps/api</em></li>
+      </ol>
+      <div class="callout">
+        <p>Parsers are plain Python that take bytes and return rows. They import neither FastAPI nor the database, so every parser is tested with synthetic files alone.</p>
+      </div>
+      <h3>Libraries, all free and local</h3>
+      <ul class="plain">
+        <li>CSV with the standard library; QIF with a small hand-written parser; OFX with <code>ofxtools</code> or <code>ofxparse</code>.</li>
+        <li>PDF text and tables with <code>pdfplumber</code>. One bank layout first; a second parser only when a second real layout exists.</li>
+        <li>Password-protected PDFs are opened in memory with a password you type. It is never stored.</li>
+        <li>Each library is checked for maintenance and known vulnerabilities before it is added.</li>
+      </ul>
+    </section>
+
+    <section id="milestones" aria-labelledby="ms-h">
+      <h2 id="ms-h">Milestones</h2>
+      <ol class="milestones">
+        <li>
+          <div class="id">M0</div>
+          <div>
+            <h3>Scaffold</h3>
+            <p class="tag gate">Needs your go-ahead before any dependency is installed</p>
+            <ul>
+              <li><code>packages/core</code> with pytest, strict mypy and ruff; <code>apps/api</code> with FastAPI.</li>
+              <li><code>packages/db</code>, <code>apps/web</code> (Vite, strict TypeScript, Tailwind, Vitest), Postgres through Docker Compose.</li>
+              <li>CI workflow, and <code>CLAUDE.md</code> and READMEs updated with the real commands.</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="id">M1</div>
+          <div>
+            <h3>Core primitives</h3>
+            <ul>
+              <li><code>Money</code> as integer minor units plus an ISO currency code. Amounts parse from decimal strings, never floats.</li>
+              <li>UTC timestamps, with the date a transaction occurred kept apart from when it was imported.</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="id">M2</div>
+          <div>
+            <h3>Persistence and sign-in</h3>
+            <ul>
+              <li>SQLAlchemy models and Alembic migrations.</li>
+              <li>One local user, Argon2 password hash, server-side session in an HttpOnly cookie. Every route checks the session; none trusts a user ID from the client.</li>
+              <li>Account identifiers encrypted at rest, key from an environment variable.</li>
+              <li>Accounts and transactions create, read, update and delete, validated with Pydantic.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="core">
+          <div class="id">M3</div>
+          <div>
+            <h3>Import pipeline</h3>
+            <p class="tag">The heart of v1</p>
+            <ul>
+              <li>Parsers in order: CSV, OFX, QIF, then the first text-PDF layout.</li>
+              <li>Limits on upload size and row count, content-based type check, and neutralized leading <code>= + - @</code> in text fields.</li>
+              <li>Occurrence-count de-duplication as shown above. When the format supplies the bank's own transaction ID (OFX <code>FITID</code>), that ID is the key.</li>
+              <li>Possible duplicates appear in the review step. They are never dropped silently.</li>
+              <li>Import batches store the file hash only. The raw file is not kept by default.</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="id">M4</div>
+          <div>
+            <h3>Categories, recurring items, holdings</h3>
+            <ul>
+              <li>Rule engine with explicit priority, so the same transaction always gets the same category. A manual category always wins.</li>
+              <li>Subscriptions, EMIs and SIPs as manual records. History can suggest a recurring item; it never creates one on its own.</li>
+              <li>Equity, mutual fund and fixed-deposit holdings with valuation history in minor units.</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="id">M5</div>
+          <div>
+            <h3>Net worth and budgets</h3>
+            <ul>
+              <li>Net worth at any date is account balances plus holdings, minus liabilities such as cards and loans.</li>
+              <li>Monthly budgets against actuals and category breakdowns. A transaction is counted once, and transfers between your own accounts are excluded.</li>
+              <li>Currency is stored on every amount. One display currency, no conversion in v1.</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="id">M6</div>
+          <div>
+            <h3>Web app</h3>
+            <ul>
+              <li>Sign-in, accounts, transactions, the import wizard (upload, preview, resolve, commit), rules, recurring items, holdings, net-worth chart, budgets and reports.</li>
+              <li>Zod validation on forms, TanStack Query for data.</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="id">M7</div>
+          <div>
+            <h3>Hardening</h3>
+            <ul>
+              <li>Playwright end-to-end run from import to report.</li>
+              <li><code>pnpm audit</code> and a Python vulnerability scan in CI.</li>
+              <li>Threat-model note in <code>docs/</code>, and a final check that no real data or secrets are in the repository.</li>
+            </ul>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="testing" aria-labelledby="test-h">
+      <h2 id="test-h">Testing</h2>
+      <p>Every fixture is synthetic: invented names, round amounts, fictional account numbers. Sample PDFs are generated by code so no real statement ever enters the repository.</p>
+      <table>
+        <thead><tr><th scope="col">Area</th><th scope="col">What gets tested</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Money and dates</th><td>Arithmetic in minor units, rounding, UTC handling, occurred date versus import date</td></tr>
+          <tr><th scope="row">Parsers</th><td>Golden files per format; malformed, oversized and wrong-type files rejected with no partial rows</td></tr>
+          <tr><th scope="row">De-duplication</th><td>Same file twice, overlapping statements, genuine repeat purchases stay separate</td></tr>
+          <tr><th scope="row">Categorization</th><td>Same input and rules give the same category; priority order; manual override</td></tr>
+          <tr><th scope="row">Net worth and budgets</th><td>Assets minus liabilities at a date, each transaction counted once, own-account transfers excluded</td></tr>
+          <tr><th scope="row">API</th><td>Each endpoint has a happy path and a validation failure; unauthenticated requests are refused</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="decisions" aria-labelledby="dec-h">
+      <h2 id="dec-h">Decisions needed</h2>
+      <dl class="decisions">
+        <div>
+          <dt>Which bank's PDF layout comes first?</dt>
+          <dd>A synthetic sample that mimics its layout is enough. Please do not commit a real statement.</dd>
+        </div>
+        <div>
+          <dt>Should uploaded files be kept?</dt>
+          <dd><b>Recommended: no.</b> Keep the file hash and parsed rows only. That removes the stored-statement risk entirely.</dd>
+        </div>
+        <div>
+          <dt>How does sign-in work?</dt>
+          <dd><b>Recommended:</b> one local user created by a setup command, with a password and session cookie.</dd>
+        </div>
+        <div>
+          <dt>Which display currency?</dt>
+          <dd><b>Proposed:</b> INR, changeable in <code>config.yml</code>.</dd>
+        </div>
+        <div>
+          <dt>Where do we start?</dt>
+          <dd><b>Recommended:</b> scaffold <code>core</code> and <code>api</code> only, build M1 to M3, and add the web app once imports work end to end.</dd>
+        </div>
+      </dl>
+    </section>
+
+    <footer>FinanceOS is pre-MVP. This page contains no real financial data.</footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var existing = document.getElementById('existing');
+    var infile = document.getElementById('infile');
+    var added = document.getElementById('added');
+    var explain = document.getElementById('explain');
+    var formula = document.getElementById('formula');
+    var result = document.getElementById('result');
+    var presets = document.querySelectorAll('.presets button');
+
+    function read(el) {
+      var n = parseInt(el.value, 10);
+      return isNaN(n) || n < 0 ? 0 : Math.min(n, 99);
+    }
+    function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+    function update() {
+      var e = read(existing), f = read(infile);
+      var n = Math.max(0, f - e);
+      added.textContent = n;
+      result.classList.toggle('none', n === 0);
+      if (n === 0 && f > 0) {
+        explain.textContent = 'Nothing new. All ' + plural(f, 'row', 'rows') + ' already exist, so totals do not change.';
+      } else if (n === 0) {
+        explain.textContent = 'The file has no rows with this key.';
+      } else if (e === 0) {
+        explain.textContent = 'New rows added. ' + plural(f, 'purchase', 'purchases') + ' on the same day stay as separate entries.';
+      } else {
+        explain.textContent = 'Added. ' + plural(e, 'row was', 'rows were') + ' already saved, so only the extra ' + plural(n, 'row', 'rows') + ' count.';
+      }
+      formula.textContent = 'rows added = max(0, ' + f + ' − ' + e + ') = ' + n;
+    }
+
+    function syncPresets() {
+      var e = read(existing), f = read(infile);
+      presets.forEach(function (b) {
+        b.setAttribute('aria-pressed', String(+b.dataset.e === e && +b.dataset.f === f));
+      });
+    }
+
+    presets.forEach(function (b) {
+      b.addEventListener('click', function () {
+        existing.value = b.dataset.e;
+        infile.value = b.dataset.f;
+        update(); syncPresets();
+      });
+    });
+    [existing, infile].forEach(function (el) {
+      el.addEventListener('input', function () { update(); syncPresets(); });
+    });
+    update();
+  })();
+</script>
+</body>
+</html>

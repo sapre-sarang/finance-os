@@ -5,9 +5,10 @@ cards, mandates/subscriptions, investments, and net worth — without handing
 your financial data to a third party or paying for infrastructure before the
 product has proven itself.
 
-> **Status:** Pre-MVP. This repository currently contains project scaffolding
-> and planning documents only. No application code, dependencies, or real
-> financial data exist yet.
+> **Status:** Pre-MVP, first vertical slice. Sign-in, accounts, transactions,
+> net worth and CSV statement import (with de-duplication) work end to end.
+> OFX, QIF, PDF, categorization, budgets and recurring items are not built
+> yet. No real financial data is in the repository.
 
 ## Product Vision
 
@@ -101,17 +102,14 @@ See each directory's `README.md` for details on what belongs there.
 
 ## Setup
 
-Nothing is installable yet — this is intentional until the first module is
-scaffolded. Once the frontend and backend are scaffolded:
+1. Install [Node.js LTS](https://nodejs.org/), [pnpm](https://pnpm.io/) and [uv](https://docs.astral.sh/uv/). `uv` downloads the pinned Python 3.13 itself.
+2. Copy `config.example.yml` to `config.yml` for local non-secret settings.
+3. Copy `.env.example` to `.env` and fill in local credentials (never commit `.env`).
+4. Have a PostgreSQL server running and create the `finance_os` role and the `finance_os_dev` / `finance_os_test` databases — see [packages/db/README.md](./packages/db/README.md). This machine reuses its existing Postgres container instead of starting a new one.
+5. In `apps/api`: `uv sync`, then `uv run python -m app.cli migrate`, then `uv run python -m app.cli create-user <username>`, then `uv run uvicorn --factory app.main:create_app --reload`.
+6. In `apps/web`: `pnpm install`, then `pnpm dev`, and open http://127.0.0.1:5173.
 
-1. Install [Node.js LTS](https://nodejs.org/) and [pnpm](https://pnpm.io/) for the React frontend.
-2. Install Python 3.11 or newer for the API and domain package.
-3. Copy `config.example.yml` to `config.yml` for local non-secret settings.
-4. Copy `.env.example` to `.env` and fill in local credentials (never commit `.env`).
-5. Run a local PostgreSQL instance (Docker Compose file to be added in `docs/`).
-6. Install frontend dependencies with `pnpm install`.
-7. Create a Python virtual environment and install the backend dependencies from `apps/api`.
-8. Apply database migrations and start the API and frontend using their documented development commands.
+A root `Makefile` wraps all of this: `make setup`, `make migrate`, `make create-user APP_USER=<name>`, `make dev` (API and web together), `make check` (lint, type-check and every test suite). Run `make help` for the list. On Windows, `winget install ezwinports.make` provides `make`. Each module's README lists its own commands.
 
 `config.yml` holds non-secret runtime settings such as service URLs, ports,
 and database host/name. `.env` is reserved for credentials such as database

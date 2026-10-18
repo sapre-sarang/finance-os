@@ -7,16 +7,25 @@ the user in a given conversation.
 
 ## Current State
 
-Pre-MVP: every directory under `apps/`, `packages/`, `docs/`, and
-`scripts/`, plus `.github/workflows/`, contains only a placeholder
-`README.md` describing what it will eventually hold — there is no
-scaffolded code, no `package.json`/`pyproject.toml`, no dependencies, and no
-build/lint/test commands yet. Don't search for tooling that isn't there;
-check each directory's `README.md` and the root [README.md](./README.md)
-for what's planned. Once a module is scaffolded, this section (and each
-affected directory's README) should be updated with the real commands in
-the same change — see "Don't install dependencies or scaffold a framework
-without asking" below.
+Pre-MVP, first vertical slice. Scaffolded and working:
+
+- `packages/core` (Python, `uv`): money, CSV import parsing, de-duplication.
+- `packages/db` (SQLAlchemy + Alembic, Postgres): models, migration, field encryption.
+- `apps/api` (FastAPI): sign-in, accounts, transactions, imports, summary.
+- `apps/web` (React, Vite, pnpm): sign-in, overview, accounts, transactions, import.
+
+The root `Makefile` is the entry point: `make check` runs lint, type-checks
+and all tests across every module and should pass before a commit. Python
+projects are pinned to 3.13 and each has `uv sync`, `uv run pytest`,
+`uv run mypy` and `uv run ruff check` (the web app has `pnpm typecheck` and
+`pnpm test`). Exact setup steps and per-module notes are in the root
+[README.md](./README.md) and each module's `README.md`. Tests that touch the
+database use the `finance_os_test` database on the local Postgres and wipe it.
+
+`.github/workflows/` and `scripts/` are still placeholders. Don't search for
+tooling that isn't there. Build order for v1 is in
+[docs/implementation-plan.html](./docs/implementation-plan.html). Keep this
+section and the affected README in sync whenever a module changes.
 
 ## Project Goals
 
